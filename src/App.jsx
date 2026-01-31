@@ -4,8 +4,16 @@ import HomePage from './pages/HomePage';
 import EditPage from './pages/EditPage';
 import io from 'socket.io-client';
 
+// --- UPDATED SOCKET CONFIGURATION ---
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const socket = io(API_URL);
+
+const socket = io(API_URL, {
+  path: "/socket.io/",
+  transports: ["polling", "websocket"], // Google Cloud Run prefers polling for the initial handshake
+  withCredentials: true,
+  reconnectionAttempts: 5,
+  timeout: 20000
+});
 
 function App() {
   const [clips, setClips] = useState([]);
