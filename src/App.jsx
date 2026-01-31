@@ -4,7 +4,7 @@ import HomePage from './pages/HomePage';
 import EditPage from './pages/EditPage';
 import io from 'socket.io-client';
 
-// --- VERSION 3.02: STABILIZED CONNECTION ---
+// --- VERSION 3.03: CLOUD HANDSHAKE FIX ---
 function App() {
   const [clips, setClips] = useState([]);
   const [status, setStatus] = useState({ isProcessing: false, progress: 0, logs: [] });
@@ -16,11 +16,13 @@ function App() {
     console.log("🚀 LOKMAT STUDIO: Initializing Engine at:", backendUrl);
 
     const newSocket = io(backendUrl, {
-      transports: ["websocket", "polling"], // Allow fallback but keep it on Cloud Run URL
+      path: "/socket.io/", // CRITICAL: Matches the backend path we set
+      transports: ["websocket", "polling"], 
+      withCredentials: true, // Required for CORS handshake
       secure: true,
       reconnection: true,
-      reconnectionAttempts: 5,
-      timeout: 20000
+      reconnectionAttempts: 10, // Increased for better stability
+      timeout: 30000 // Increased for heavy video uploads
     });
 
     newSocket.on("connect", () => {
