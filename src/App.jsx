@@ -7,12 +7,12 @@ import io from 'socket.io-client';
 // --- UPDATED SOCKET CONFIGURATION ---
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-const socket = io(API_URL, {
+// --- FORCE CONNECTION TO GOOGLE CLOUD ---
+const socket = io("https://lokmat-slicer-453213181309.us-central1.run.app", {
   path: "/socket.io/",
-  transports: ["polling", "websocket"], // Google Cloud Run prefers polling for the initial handshake
+  transports: ["polling", "websocket"],
   withCredentials: true,
-  reconnectionAttempts: 5,
-  timeout: 20000
+  reconnectionAttempts: 5
 });
 
 function App() {
