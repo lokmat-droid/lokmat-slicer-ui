@@ -6,14 +6,19 @@ import io from 'socket.io-client';
 
 // --- UPDATED SOCKET CONFIGURATION ---
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-// Explicitly point to the Cloud Run backend
+// --- BULLETPROOF SOCKET CONFIG ---
 const BACKEND_URL = "https://lokmat-slicer-453213181309.us-central1.run.app";
-// --- FORCE CONNECTION TO GOOGLE CLOUD ---
+console.log("🚀 LOKMAT SLICER: Initializing socket to:", BACKEND_URL);
+
 const socket = io(BACKEND_URL, {
-  transports: ['websocket', 'polling'], // Allow both, but websocket is preferred
+  transports: ['websocket'],
   secure: true,
-  withCredentials: true // Important for cross-domain communication
+  reconnection: true,
+  rejectUnauthorized: false // Helps with some Cloud Run SSL handshakes
 });
+
+socket.on("connect", () => console.log("✅ CONNECTED TO BACKEND:", socket.id));
+socket.on("connect_error", (err) => console.error("❌ CONNECTION ERROR:", err.message));
 
 function App() {
   const [clips, setClips] = useState([]);
