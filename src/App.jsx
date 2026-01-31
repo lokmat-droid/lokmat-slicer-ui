@@ -4,53 +4,36 @@ import HomePage from './pages/HomePage';
 import EditPage from './pages/EditPage';
 import io from 'socket.io-client';
 
-// --- UPDATED SOCKET CONFIGURATION ---
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-// --- BULLETPROOF SOCKET CONFIG ---
-const BACKEND_URL = "https://lokmat-slicer-453213181309.us-central1.run.app";
-// --- FORCE THE CONNECTION & BREAK CACHE ---
-console.log("🚀 LOKMAT STUDIO LIVE - VERSION 3.01"); 
-
-const socket = io("https://lokmat-slicer-453213181309.us-central1.run.app", {
-  path: "/socket.io/",
-  transports: ["websocket"],
-  secure: true,
-  reconnection: true
-});
-
-socket.on("connect", () => console.log("✅ CONNECTED TO CLOUD RUN:", socket.id));
-socket.on("connect_error", (err) => console.error("❌ CONNECTION ERROR:", err.message));
-
+// --- VERSION 3.02: STABILIZED CONNECTION ---
 function App() {
   const [clips, setClips] = useState([]);
   const [status, setStatus] = useState({ isProcessing: false, progress: 0, logs: [] });
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    // 🚀 THE FIX: Hardcoded Cloud Run URL to bypass Vercel 404s
+    // Force direct connection to Google Cloud Run
     const backendUrl = "https://lokmat-slicer-453213181309.us-central1.run.app";
-    console.log("🚀 LOKMAT STUDIO: Attempting connection to:", backendUrl);
+    console.log("🚀 LOKMAT STUDIO: Initializing Engine at:", backendUrl);
 
     const newSocket = io(backendUrl, {
-      transports: ["websocket"],
+      transports: ["websocket", "polling"], // Allow fallback but keep it on Cloud Run URL
       secure: true,
       reconnection: true,
       reconnectionAttempts: 5,
       timeout: 20000
     });
 
-    // Handle connection events
     newSocket.on("connect", () => {
-      console.log("✅ SUCCESS! Connected to Cloud Run ID:", newSocket.id);
+      console.log("✅ ENGINE CONNECTED! Session ID:", newSocket.id);
     });
 
     newSocket.on("connect_error", (err) => {
-      console.error("❌ SOCKET FAILED. Reason:", err.message);
+      console.error("❌ CONNECTION ERROR:", err.message);
     });
 
     // 🧼 THE BRAIN WASH: Kill ghosts when server restarts
     const handleReset = () => {
-      console.log("🧼 SERVER RESET: Clearing persistent memory.");
+      console.log("🧼 SERVER RESET: Clearing memory.");
       localStorage.removeItem('lokmat_processed_clips');
       setClips([]);
       setStatus({ isProcessing: false, progress: 0, logs: [] });
@@ -64,15 +47,12 @@ function App() {
       if (data.newClip) {
         setClips((prev) => {
           const exists = prev.find((c) => c.localUrl === data.newClip.localUrl);
-
-          // Force thumbnail cache busting with timestamp
           const updatedClip = {
             ...data.newClip,
             thumbnail: data.newClip.thumbnail
               ? `${data.newClip.thumbnail.split('?')[0]}?v=${Date.now()}`
               : null
           };
-
           if (exists) {
             return prev.map(c => c.localUrl === updatedClip.localUrl ? updatedClip : c);
           }
@@ -84,7 +64,7 @@ function App() {
         setStatus((prev) => ({
           ...prev,
           progress: data.progress ?? prev.progress,
-          isProcessing: data.progress > 0 && data.progress < 100,
+          isProcessing: (data.progress > 0 && data.progress < 100),
           logs: data.log ? [...prev.logs, data.log].slice(-10) : prev.logs
         }));
       }
@@ -105,13 +85,31 @@ function App() {
         <Route
           path="/"
           element={
-            <HomePage 
-              clips={clips} 
-              setClips={setClips} 
-              status={status} 
-              setStatus={setStatus} 
-              socket={socket} 
-            />
+            /* 🛡️ GUARD: Only show HomePage once the socket is initialized */
+            socket ? (
+              <HomePage 
+                clips={clips} 
+                setClips={setClips} 
+                status={status} 
+                setStatus={setStatus} 
+                socket={socket} 
+              />
+            ) : (
+              <div style={{ 
+                backgroundColor: '#1a1a1a', 
+                color: 'white', 
+                height: '100vh', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                fontFamily: 'sans-serif'
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <h2 style={{ marginBottom: '10px' }}>Initializing Lokmat AI Engine...</h2>
+                  <p style={{ opacity: 0.7 }}>Establishing handshake with Google Cloud...</p>
+                </div>
+              </div>
+            )
           }
         />
         <Route path="/edit/:id" element={<EditPage />} />
