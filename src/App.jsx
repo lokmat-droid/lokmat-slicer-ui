@@ -24,8 +24,30 @@ socket.on("connect_error", (err) => console.error("❌ CONNECTION ERROR:", err.m
 function App() {
   const [clips, setClips] = useState([]);
   const [status, setStatus] = useState({ isProcessing: false, progress: 0, logs: [] });
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
+    // 🚀 THE FIX: Hardcoded Cloud Run URL to bypass Vercel 404s
+    const backendUrl = "https://lokmat-slicer-453213181309.us-central1.run.app";
+    console.log("🚀 LOKMAT STUDIO: Attempting connection to:", backendUrl);
+
+    const newSocket = io(backendUrl, {
+      transports: ["websocket"],
+      secure: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      timeout: 20000
+    });
+
+    // Handle connection events
+    newSocket.on("connect", () => {
+      console.log("✅ SUCCESS! Connected to Cloud Run ID:", newSocket.id);
+    });
+
+    newSocket.on("connect_error", (err) => {
+      console.error("❌ SOCKET FAILED. Reason:", err.message);
+    });
+
     // 🧼 THE BRAIN WASH: Kill ghosts when server restarts
     const handleReset = () => {
       console.log("🧼 SERVER RESET: Clearing persistent memory.");
@@ -35,10 +57,10 @@ function App() {
       window.location.reload();
     };
 
-    socket.on("SESSION_HARD_RESET", handleReset);
-    socket.on("GLOBAL_RESET", handleReset);
+    newSocket.on("SESSION_HARD_RESET", handleReset);
+    newSocket.on("GLOBAL_RESET", handleReset);
 
-    socket.on("statusUpdate", (data) => {
+    newSocket.on("statusUpdate", (data) => {
       if (data.newClip) {
         setClips((prev) => {
           const exists = prev.find((c) => c.localUrl === data.newClip.localUrl);
@@ -68,9 +90,12 @@ function App() {
       }
     });
 
+    setSocket(newSocket);
+
     return () => {
-      socket.off("SESSION_HARD_RESET");
-      socket.off("statusUpdate");
+      newSocket.off("SESSION_HARD_RESET");
+      newSocket.off("statusUpdate");
+      newSocket.disconnect();
     };
   }, []);
 
@@ -79,7 +104,15 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={<HomePage clips={clips} setClips={setClips} status={status} setStatus={setStatus} socket={socket} />}
+          element={
+            <HomePage 
+              clips={clips} 
+              setClips={setClips} 
+              status={status} 
+              setStatus={setStatus} 
+              socket={socket} 
+            />
+          }
         />
         <Route path="/edit/:id" element={<EditPage />} />
       </Routes>
