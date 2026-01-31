@@ -17,8 +17,8 @@ function App() {
 
     const newSocket = io(backendUrl, {
   path: "/socket.io/",
-  transports: ["websocket"], // 👈 CHANGE THIS: Remove "polling"
-  upgrade: false,             // 👈 ADD THIS: Don't try to upgrade from polling
+  transports: ["websocket"], // 👈 STRICT: Remove 'polling' entirely
+  upgrade: false,             // 👈 CRITICAL: Stop it from trying to switch methods
   withCredentials: true,
   secure: true,
   reconnection: true,
