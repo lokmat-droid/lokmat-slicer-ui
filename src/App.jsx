@@ -6,13 +6,13 @@ import io from 'socket.io-client';
 
 // --- UPDATED SOCKET CONFIGURATION ---
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
+// Explicitly point to the Cloud Run backend
+const BACKEND_URL = "https://lokmat-slicer-453213181309.us-central1.run.app";
 // --- FORCE CONNECTION TO GOOGLE CLOUD ---
-const socket = io("https://lokmat-slicer-453213181309.us-central1.run.app", {
-  path: "/socket.io/",
-  transports: ["polling", "websocket"],
-  withCredentials: true,
-  reconnectionAttempts: 5
+const socket = io(BACKEND_URL, {
+  transports: ['websocket', 'polling'], // Allow both, but websocket is preferred
+  secure: true,
+  withCredentials: true // Important for cross-domain communication
 });
 
 function App() {
