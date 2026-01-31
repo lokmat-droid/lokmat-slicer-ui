@@ -16,14 +16,15 @@ function App() {
     console.log("🚀 LOKMAT STUDIO: Initializing Engine at:", backendUrl);
 
     const newSocket = io(backendUrl, {
-      path: "/socket.io/", // CRITICAL: Matches the backend path we set
-      transports: ["websocket", "polling"], 
-      withCredentials: true, // Required for CORS handshake
-      secure: true,
-      reconnection: true,
-      reconnectionAttempts: 10, // Increased for better stability
-      timeout: 30000 // Increased for heavy video uploads
-    });
+  path: "/socket.io/",
+  transports: ["websocket"], // 👈 CHANGE THIS: Remove "polling"
+  upgrade: false,             // 👈 ADD THIS: Don't try to upgrade from polling
+  withCredentials: true,
+  secure: true,
+  reconnection: true,
+  reconnectionAttempts: 10,
+  timeout: 45000 
+});
 
     newSocket.on("connect", () => {
       console.log("✅ ENGINE CONNECTED! Session ID:", newSocket.id);
