@@ -8,16 +8,17 @@ import io from 'socket.io-client';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 // --- BULLETPROOF SOCKET CONFIG ---
 const BACKEND_URL = "https://lokmat-slicer-453213181309.us-central1.run.app";
-console.log("🚀 LOKMAT SLICER: Initializing socket to:", BACKEND_URL);
+// --- FORCE THE CONNECTION & BREAK CACHE ---
+console.log("🚀 LOKMAT STUDIO LIVE - VERSION 3.01"); 
 
-const socket = io(BACKEND_URL, {
-  transports: ['websocket'],
+const socket = io("https://lokmat-slicer-453213181309.us-central1.run.app", {
+  path: "/socket.io/",
+  transports: ["websocket"],
   secure: true,
-  reconnection: true,
-  rejectUnauthorized: false // Helps with some Cloud Run SSL handshakes
+  reconnection: true
 });
 
-socket.on("connect", () => console.log("✅ CONNECTED TO BACKEND:", socket.id));
+socket.on("connect", () => console.log("✅ CONNECTED TO CLOUD RUN:", socket.id));
 socket.on("connect_error", (err) => console.error("❌ CONNECTION ERROR:", err.message));
 
 function App() {
