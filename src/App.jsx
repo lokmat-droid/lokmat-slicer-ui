@@ -11,8 +11,9 @@ function App() {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    // Force direct connection to Google Cloud Run
-    const backendUrl = "https://lokmat-slicer-j2qctvyefa-uc.a.run.app";
+  const backendUrl =
+    import.meta.env.VITE_API_URL || "http://localhost:3000";
+
     console.log("🚀 LOKMAT STUDIO: Initializing Engine at:", backendUrl);
 
     const newSocket = io(backendUrl, {
