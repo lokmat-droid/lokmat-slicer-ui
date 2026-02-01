@@ -12,7 +12,7 @@ function App() {
 
   useEffect(() => {
     // Force direct connection to Google Cloud Run
-    const backendUrl = "https://lokmat-slicer-453213181309.us-central1.run.app";
+    const backendUrl = "https://lokmat-slicer-j2qctvyefa-uc.a.run.app";
     console.log("🚀 LOKMAT STUDIO: Initializing Engine at:", backendUrl);
 
     const newSocket = io(backendUrl, {
