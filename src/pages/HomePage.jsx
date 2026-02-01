@@ -1,11 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState, useRef } from "react";
-import io from "socket.io-client";
 import { FaceDetector, FilesetResolver } from "@mediapipe/tasks-vision";
-
-const socket = io("/", {
-  path: "/socket.io",
-});
 
 // ✅ HELPER PLACEMENT: Keep this OUTSIDE the component so it's only created once
 const calculateLipVariance = (landmarks) => {
