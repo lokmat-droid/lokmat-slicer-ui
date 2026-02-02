@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useEffect, useState, useRef } from "react";
 import { FaceDetector, FilesetResolver } from "@mediapipe/tasks-vision";
-
+// ✅ PLACE THIS HERE (Outside the component)
+const API_URL = (import.meta.env.VITE_API_URL || "https://lokmat-slicer-453213181309.us-central1.run.app").replace(/\/$/, "");
+const API_BASE_URL = API_URL;
 // ✅ HELPER PLACEMENT: Keep this OUTSIDE the component so it's only created once
 const calculateLipVariance = (landmarks) => {
   if (!landmarks) return 0;
@@ -398,8 +400,6 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 
     setStatus({ isProcessing: true, progress: 10, logs: ["Manual Slicing Initiated..."] });
 
-    const API_URL = (import.meta.env.VITE_API_URL || "https://lokmat-slicer-453213181309.us-central1.run.app").replace(/\/$/, "");
-    const API_BASE_URL = API_URL;
     try {
       const response = await fetch(API_URL + "/api/manual-slice", {
         method: "POST",
