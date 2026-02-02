@@ -37,14 +37,9 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
   const videoRef = useRef(null);
   const bgVideoRef = useRef(null);
 
-  // ✅ HARD FIX: block accidental page reload/navigation after upload.
-  // - You had a socket listener that FORCE reloads the page (SESSION_HARD_RESET).
-  //   That will wipe the UI immediately after upload if the server emits it.
-  // - We keep the "wipe memory" behavior, but do NOT reload the page.
-  // - Also guard against any unexpected unloads while processing.
+  // ✅ HARD FIX: Prevent accidental unload while processing
   useEffect(() => {
     const onBeforeUnload = (e) => {
-      // If processing, prevent accidental tab/page refresh from killing socket listeners.
       if (status?.isProcessing) {
         e.preventDefault();
         e.returnValue = "";
@@ -123,8 +118,8 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
           try {
             if (!landmarkerRef.current) return resolve();
 
-            // The actual detection call
-            const results = landmarkerRef.current.detectForVideo(tempVideo, Date.now());
+            // ✅ FIX: Use video-time-based timestamp, NOT Date.now()
+            const results = landmarkerRef.current.detectForVideo(tempVideo, tempVideo.currentTime * 1000);
             clearTimeout(frameTimeout); // Success! Stop the timer.
 
             if (results.detections.length > 0) {
@@ -144,7 +139,7 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
                 qualityScore: (bestFace ? bestFace.area * 100 : 0) + (results.detections.length * 5)
               });
 
-              console.log(`✅ Tracked (GPU): X=${finalX.toFixed(2)} | Faces=${results.detections.length}`);
+              console.log(`✅ Tracked (CPU): X=${finalX.toFixed(2)} | Faces=${results.detections.length}`);
             } else {
               xCoords.push({ x: 0.5, timestamp: tempVideo.currentTime, qualityScore: 0, faceArea: 0 });
             }
@@ -183,7 +178,7 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
         }
       }
 
-      if (typeof socket !== 'undefined') {
+      if (typeof socket !== 'undefined' && socket) {
         socket.emit('scout-result', {
           id: id,
           anchorX: finalAnchorX,
@@ -194,25 +189,6 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 
       // 🛑 DISABLE DIRECT RENDER TRIGGER (STRICT SEQUENTIAL ARCHITECTURE)
       // The backend loop will handle rendering in Phase 2 after all scouting is done.
-      /*
-      try {
-        await fetch('/api/process-scouted-short', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileId, title, start, end,
-            description: aiDescription,
-            keywords: aiKeywords,
-            faceData: xCoords,
-            anchorX: finalAnchorX,
-            heroTimestamp: heroTimestamp,
-            rawFile: rawFile
-          })
-        });
-      } catch (error) {
-        console.error("❌ Fetch Error:", error);
-      }
-      */
 
       // ✅ FIX 3: Cleanup inside the function
       if (tempVideo.parentNode) document.body.removeChild(tempVideo);
@@ -229,13 +205,12 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
     document.body.appendChild(tempVideo);
   }; // <--- CORRECT CLOSING
 
-  // --- SOCKET LISTENERS (Paste this ABOVE your playback logic) ---
+  // --- SOCKET LISTENERS ---
+  // NOTE: App.jsx already listens to statusUpdate/upload-progress globally.
+  // Keeping these here is OK, but ensure NO page reloads are triggered.
   useEffect(() => {
-    // Safety check in case socket isn't ready
     if (typeof socket === 'undefined' || !socket) return;
 
-    // ✅ HARD FIX: DO NOT reload the page on server reset.
-    // Reload wipes socket listeners + UI state and creates the exact "upload done -> UI resets" symptom.
     socket.on('SESSION_HARD_RESET', () => {
       console.log("🧼 SERVER RESET: Clearing persistent memory (NO RELOAD).");
       localStorage.clear();
@@ -243,22 +218,17 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
       setSelectedClips([]);
       setPreviewClip(null);
       setStatus({ isProcessing: false, progress: 0, logs: ["🧼 Server reset received. State cleared (no reload)."] });
-      // window.location.reload();  // ❌ removed
     });
 
     const handleStatus = (data) => {
       if (data.shortSuggestion) {
-        // 🔥 THE FIX: Stagger the AI start times based on the segment ID.
-        // This prevents the browser from choking on 3 parallel AI tasks.
         const staggerDelay = (data.shortSuggestion.id || 0) * 2000;
-
         setTimeout(() => {
           console.log(`⏱️ Staggered start for Scout ${data.shortSuggestion.id}`);
           scoutVideo(data.shortSuggestion);
         }, staggerDelay);
       }
 
-      // 2. Add or update clips in the list
       if (data.newClip) {
         setClips((prev) => {
           const exists = prev.find((c) => c.localUrl === data.newClip.localUrl);
@@ -267,13 +237,12 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
         });
       }
 
-      // 3. Update Global Status/Logs
       if (data.progress !== undefined || data.log) {
         setStatus((prev) => ({
           ...prev,
           progress: data.progress ?? prev.progress,
           isProcessing: (data.progress ?? prev.progress) > 0 && (data.progress ?? prev.progress) < 100,
-          logs: data.log ? [...prev.logs, data.log].slice(-5) : prev.logs
+          logs: data.log ? [...(prev.logs || []), data.log].slice(-5) : (prev.logs || [])
         }));
       }
     };
@@ -281,9 +250,9 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
     const handleUpload = (data) => {
       setStatus((prev) => ({
         ...prev,
-        progress: data.percent,
-        isProcessing: data.percent > 0 && data.percent < 100,
-        logs: data.status ? [...prev.logs, `⚙️ ${data.status}`].slice(-5) : prev.logs
+        progress: data.percent ?? prev.progress,
+        isProcessing: (data.percent ?? prev.progress) > 0 && (data.percent ?? prev.progress) < 100,
+        logs: data.status ? [...(prev.logs || []), `⚙️ ${data.status}`].slice(-5) : (prev.logs || [])
       }));
     };
 
@@ -352,35 +321,40 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
   };
 
   const handleFileChange = async (event) => {
-    // ✅ HARD FIX: kill any implicit submit/reload chains from parent wrappers.
     if (event?.preventDefault) event.preventDefault();
     if (event?.stopPropagation) event.stopPropagation();
 
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
     const formData = new FormData();
     formData.append("video", file);
 
+    // 🔗 THE LINK: Tell the backend which socket owns this video
+    if (socket?.id) formData.append("socketId", socket.id);
+
     // 🧹 ZERO-LEAK: Wipe state immediately on new upload
     setClips([]);
     localStorage.removeItem('processedClips');
 
-    // ✅ UX FIX: "Upload complete" should NOT imply "processing complete".
-    // Keep processing state ON and show that we are now waiting for engine/socket updates.
     setStatus({
       isProcessing: true,
       progress: 10,
-      logs: ["🚀 Initiating upload...", "🧹 Previous session wiped."]
+      logs: [
+        "🚀 Handshaking with Cloud Run...",
+        socket?.id ? `🧷 Socket Linked: ${socket.id}` : "⚠️ Socket not ready yet (no socketId)",
+        "📦 Preparing video chunks..."
+      ].slice(-5)
     });
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/\/$/, "");
 
     try {
       const response = await fetch(`${API_URL}/api/upload`, {
         method: "POST",
         body: formData,
-        credentials: "include",
+        // 🚨 NO HEADERS: Browser must set the boundary automatically
+        // 🚨 NO credentials: "include" unless backend is strictly mapped
       });
 
       if (!response.ok) {
@@ -388,31 +362,28 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
         setStatus({
           isProcessing: false,
           progress: 0,
-          logs: [`❌ Upload Failed (${response.status}) ${text}`],
+          logs: [`❌ Upload Failed (${response.status}) ${text}`].slice(-5),
         });
         return;
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (data.success) {
-        // ✅ Keep isProcessing true; wait for socket statusUpdate / newClip.
+        console.log("✅ Upload accepted by Engine. Waiting for AI progress...");
         setStatus((prev) => ({
           ...prev,
-          progress: Math.max(prev.progress, 35),
+          progress: Math.max(prev.progress, 15),
           isProcessing: true,
-          logs: [...prev.logs, "✅ Upload Complete", "⏳ Waiting for engine processing updates..."].slice(-5),
+          logs: [...(prev.logs || []), "✅ Upload accepted by Engine. Waiting for AI progress..."].slice(-5),
         }));
+        // ✅ DO NOT set progress=100 here. Let the socket do it.
       } else {
-        setStatus({
-          isProcessing: false,
-          progress: 0,
-          logs: ["❌ Upload response missing success flag"],
-        });
+        setStatus({ isProcessing: false, progress: 0, logs: ["❌ Upload response missing success flag"].slice(-5) });
       }
     } catch (err) {
-      setStatus({ isProcessing: false, progress: 0, logs: ["❌ Upload Failed"] });
+      console.error("CORS or Network Error:", err);
+      setStatus({ isProcessing: false, progress: 0, logs: ["❌ Upload Failed: CORS Gatekeeper Blocked"].slice(-5) });
     } finally {
-      // ✅ Allow re-upload of the same file name (Chrome won't re-fire change otherwise)
       try { event.target.value = ""; } catch (e) {}
     }
   };
@@ -422,7 +393,7 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 
     setStatus({ isProcessing: true, progress: 10, logs: ["✂️ Manual Slicing Initiated..."] });
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/\/$/, "");
     try {
       const response = await fetch(`${API_URL}/api/manual-slice`, {
         method: "POST",
@@ -434,15 +405,14 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
           xOffset: focusX,
           title: "Manual Director's Cut",
         }),
-        credentials: "include",
       });
 
       const data = await response.json();
       if (data.success) {
-        setStatus((prev) => ({ ...prev, logs: [...prev.logs, "✅ Slice Sent to Engine"].slice(-5) }));
+        setStatus((prev) => ({ ...prev, logs: [...(prev.logs || []), "✅ Slice Sent to Engine"].slice(-5) }));
       }
     } catch (err) {
-      setStatus({ isProcessing: false, progress: 0, logs: ["❌ Manual Slice Failed"] });
+      setStatus({ isProcessing: false, progress: 0, logs: ["❌ Manual Slice Failed"].slice(-5) });
     }
   };
 
