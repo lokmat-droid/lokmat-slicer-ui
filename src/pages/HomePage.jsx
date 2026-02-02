@@ -37,6 +37,24 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
   const videoRef = useRef(null);
   const bgVideoRef = useRef(null);
 
+  // ✅ HARD FIX: block accidental page reload/navigation after upload.
+  // - You had a socket listener that FORCE reloads the page (SESSION_HARD_RESET).
+  //   That will wipe the UI immediately after upload if the server emits it.
+  // - We keep the "wipe memory" behavior, but do NOT reload the page.
+  // - Also guard against any unexpected unloads while processing.
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      // If processing, prevent accidental tab/page refresh from killing socket listeners.
+      if (status?.isProcessing) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [status?.isProcessing]);
+
   // --- MEDIAPIPE INITIALIZATION ---
   useEffect(() => {
     const initAI = async () => {
@@ -214,12 +232,18 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
   // --- SOCKET LISTENERS (Paste this ABOVE your playback logic) ---
   useEffect(() => {
     // Safety check in case socket isn't ready
-    if (typeof socket === 'undefined') return;
+    if (typeof socket === 'undefined' || !socket) return;
 
+    // ✅ HARD FIX: DO NOT reload the page on server reset.
+    // Reload wipes socket listeners + UI state and creates the exact "upload done -> UI resets" symptom.
     socket.on('SESSION_HARD_RESET', () => {
-      console.log("🧼 SERVER RESET: Clearing persistent memory.");
+      console.log("🧼 SERVER RESET: Clearing persistent memory (NO RELOAD).");
       localStorage.clear();
-      window.location.reload();
+      setClips([]);
+      setSelectedClips([]);
+      setPreviewClip(null);
+      setStatus({ isProcessing: false, progress: 0, logs: ["🧼 Server reset received. State cleared (no reload)."] });
+      // window.location.reload();  // ❌ removed
     });
 
     const handleStatus = (data) => {
@@ -248,7 +272,7 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
         setStatus((prev) => ({
           ...prev,
           progress: data.progress ?? prev.progress,
-          isProcessing: data.progress > 0 && data.progress < 100,
+          isProcessing: (data.progress ?? prev.progress) > 0 && (data.progress ?? prev.progress) < 100,
           logs: data.log ? [...prev.logs, data.log].slice(-5) : prev.logs
         }));
       }
@@ -267,10 +291,12 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
     socket.on("upload-progress", handleUpload);
 
     return () => {
+      socket.off("SESSION_HARD_RESET");
       socket.off("statusUpdate", handleStatus);
       socket.off("upload-progress", handleUpload);
     };
-  }, []);
+  }, [socket]);
+
   // --- YOUR EXISTING LOGIC BELOW (DO NOT DELETE) ---
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -326,6 +352,10 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
   };
 
   const handleFileChange = async (event) => {
+    // ✅ HARD FIX: kill any implicit submit/reload chains from parent wrappers.
+    if (event?.preventDefault) event.preventDefault();
+    if (event?.stopPropagation) event.stopPropagation();
+
     const file = event.target.files[0];
     if (!file) return;
 
@@ -336,7 +366,13 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
     setClips([]);
     localStorage.removeItem('processedClips');
 
-    setStatus({ isProcessing: true, progress: 10, logs: ["🚀 Initiating upload...", "🧹 Previous session wiped."] });
+    // ✅ UX FIX: "Upload complete" should NOT imply "processing complete".
+    // Keep processing state ON and show that we are now waiting for engine/socket updates.
+    setStatus({
+      isProcessing: true,
+      progress: 10,
+      logs: ["🚀 Initiating upload...", "🧹 Previous session wiped."]
+    });
 
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -359,14 +395,25 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 
       const data = await response.json();
       if (data.success) {
+        // ✅ Keep isProcessing true; wait for socket statusUpdate / newClip.
         setStatus((prev) => ({
           ...prev,
-          progress: 100,
-          logs: [...prev.logs, "✅ Upload Complete"],
+          progress: Math.max(prev.progress, 35),
+          isProcessing: true,
+          logs: [...prev.logs, "✅ Upload Complete", "⏳ Waiting for engine processing updates..."].slice(-5),
         }));
+      } else {
+        setStatus({
+          isProcessing: false,
+          progress: 0,
+          logs: ["❌ Upload response missing success flag"],
+        });
       }
     } catch (err) {
       setStatus({ isProcessing: false, progress: 0, logs: ["❌ Upload Failed"] });
+    } finally {
+      // ✅ Allow re-upload of the same file name (Chrome won't re-fire change otherwise)
+      try { event.target.value = ""; } catch (e) {}
     }
   };
 
@@ -392,13 +439,12 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 
       const data = await response.json();
       if (data.success) {
-        setStatus((prev) => ({ ...prev, logs: [...prev.logs, "✅ Slice Sent to Engine"] }));
+        setStatus((prev) => ({ ...prev, logs: [...prev.logs, "✅ Slice Sent to Engine"].slice(-5) }));
       }
     } catch (err) {
       setStatus({ isProcessing: false, progress: 0, logs: ["❌ Manual Slice Failed"] });
     }
   };
-
 
   const toggleSelect = (url) => {
     setSelectedClips(prev => prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]);
@@ -742,6 +788,7 @@ function VideoCard({ clip, isSelected, onSelect, onPreview, onEdit }) {
         {/* --- NEW CODE START (Purple for learning) --- */}
         <div className="absolute top-4 right-4 z-30">
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation(); // Stops the 'onPreview' slice-tool from opening
               onEdit();
@@ -801,6 +848,7 @@ function ShortCard({ clip, isSelected, onSelect, onPreview, onEdit }) {
         {/* --- NEW CODE START (Purple for learning) --- */}
         <div className="absolute top-4 right-4 z-30">
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation(); // Stops the 'onPreview' slice-tool from opening
               onEdit();
@@ -828,4 +876,5 @@ function ShortCard({ clip, isSelected, onSelect, onPreview, onEdit }) {
     </div>
   );
 }
+
 export default HomePage;
