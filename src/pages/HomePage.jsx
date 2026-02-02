@@ -336,64 +336,66 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 
   const handleFileChange = async (event) => {
     if (event && event.preventDefault) event.preventDefault();
-    if (event && event.stopPropagation) event.stopPropagation();
-
-    const file = event && event.target && event.target.files ? event.target.files[0] : null;
+    
+    const file = event?.target?.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("video", file);
-
-    // 🔗 LINK SOCKET → UPLOAD (backend can emit to this socket)
-    if (socket && socket.id) formData.append("socketId", socket.id);
-
-    // 🧹 ZERO-LEAK: Wipe state immediately on new upload
+    // 🧹 ZERO-LEAK: Wipe state immediately
     setClips([]);
     localStorage.removeItem('processedClips');
 
     setStatus({
       isProcessing: true,
-      progress: 10,
-      logs: [
-        "Handshaking with Cloud Run...",
-        (socket && socket.id) ? ("Socket Linked: " + socket.id) : "Socket not ready yet (no socketId)",
-        "Preparing video chunks..."
-      ]
+      progress: 5,
+      logs: ["Initiating secure Cloud Handshake...", "Requesting GCS Upload Permit..."]
     });
 
-    const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/\/$/, "");
-
     try {
-      const response = await fetch(API_URL + "/api/upload", {
-        method: "POST",
-        body: formData
-        // ✅ NO headers, NO credentials
+      // 1. GET THE PERMIT (Signed URL)
+      const signResponse = await axios.post(`${API_BASE_URL}/api/sign-upload`, {
+        filename: file.name,
+        contentType: file.type
       });
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        setStatus({
-          isProcessing: false,
-          progress: 0,
-          logs: ["Upload Failed (" + response.status + ") " + text]
-        });
-        return;
-      }
+      const { uploadUrl, gcsPath, fileName } = signResponse.data;
 
-      const data = await response.json().catch(() => ({}));
-      if (data && data.success) {
-        setStatus((prev) => ({
-          ...prev,
-          progress: Math.max(prev.progress || 0, 15),
-          isProcessing: true,
-          logs: ([]).concat(prev.logs || [], ["Upload accepted by Engine. Waiting for AI progress..."]).slice(-5)
-        }));
-        // ✅ DO NOT set progress=100 here
-      }
-    } catch (err) {
-      console.error("CORS or Network Error:", err);
-      setStatus({ isProcessing: false, progress: 0, logs: ["Upload Failed: CORS/Network error"] });
+      // 2. DIRECT UPLOAD (Bypass 32MB limit)
+      setStatus(prev => ({
+        ...prev,
+        logs: [...prev.logs, "Permit received. Uploading directly to GCS..."]
+      }));
+
+      await axios.put(uploadUrl, file, {
+        headers: { "Content-Type": file.type || 'video/mp4' },
+        onUploadProgress: (p) => {
+          const percent = Math.round((p.loaded * 100) / p.total);
+          // First 15% of UI progress is the upload phase
+          setStatus(prev => ({ ...prev, progress: Math.min(15, percent) }));
+        }
+      });
+
+      // 3. TRIGGER ENGINE (Ingest)
+      setStatus(prev => ({
+        ...prev,
+        progress: 18,
+        logs: [...prev.logs, "✅ GCS Upload Complete.", "🚀 Initializing AI Scout..."]
+      }));
+
+      await axios.post(`${API_BASE_URL}/api/ingest-from-gcs`, {
+        gcsPath,
+        fileName,
+        socketId: socket.id 
+      });
+
+    } catch (error) {
+      console.error("❌ Big File Upload Failed:", error);
+      setStatus(prev => ({
+        ...prev,
+        isProcessing: false,
+        logs: [...prev.logs, "❌ ERROR: " + (error.response?.data?.error || error.message)]
+      }));
     } finally {
+      // Final cleanup of the event target to allow re-selection
       try { event.target.value = ""; } catch (e) {}
     }
   };
