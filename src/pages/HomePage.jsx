@@ -340,7 +340,6 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
     const file = event?.target?.files?.[0];
     if (!file) return;
 
-    // 🧹 ZERO-LEAK: Wipe state immediately
     setClips([]);
     localStorage.removeItem('processedClips');
 
@@ -351,40 +350,35 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
     });
 
     try {
-      // 1. GET THE PERMIT (Signed URL)
-      const signResponse = await axios.post(`${API_BASE_URL}/api/sign-upload`, {
-        filename: file.name,
-        contentType: file.type
+      // 1. GET THE PERMIT (Signed URL) - Using native fetch
+      const signRes = await fetch(`${API_BASE_URL}/api/sign-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type })
+      });
+      const signData = await signRes.json();
+      const { uploadUrl, gcsPath, fileName } = signData;
+
+      // 2. DIRECT UPLOAD (Bypass 32MB limit) - Using native fetch
+      setStatus(prev => ({ ...prev, logs: [...prev.logs, "Permit received. Uploading directly to GCS..."] }));
+      
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'video/mp4' },
+        body: file // Sending the raw file blob
       });
 
-      const { uploadUrl, gcsPath, fileName } = signResponse.data;
-
-      // 2. DIRECT UPLOAD (Bypass 32MB limit)
-      setStatus(prev => ({
-        ...prev,
-        logs: [...prev.logs, "Permit received. Uploading directly to GCS..."]
+      // 3. TRIGGER ENGINE (Ingest) - Using native fetch
+      setStatus(prev => ({ 
+        ...prev, 
+        progress: 18, 
+        logs: [...prev.logs, "✅ GCS Upload Complete.", "🚀 Initializing AI Scout..."] 
       }));
-
-      await axios.put(uploadUrl, file, {
-        headers: { "Content-Type": file.type || 'video/mp4' },
-        onUploadProgress: (p) => {
-          const percent = Math.round((p.loaded * 100) / p.total);
-          // First 15% of UI progress is the upload phase
-          setStatus(prev => ({ ...prev, progress: Math.min(15, percent) }));
-        }
-      });
-
-      // 3. TRIGGER ENGINE (Ingest)
-      setStatus(prev => ({
-        ...prev,
-        progress: 18,
-        logs: [...prev.logs, "✅ GCS Upload Complete.", "🚀 Initializing AI Scout..."]
-      }));
-
-      await axios.post(`${API_BASE_URL}/api/ingest-from-gcs`, {
-        gcsPath,
-        fileName,
-        socketId: socket.id 
+      
+      await fetch(`${API_BASE_URL}/api/ingest-from-gcs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gcsPath, fileName, socketId: socket.id })
       });
 
     } catch (error) {
@@ -392,10 +386,9 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
       setStatus(prev => ({
         ...prev,
         isProcessing: false,
-        logs: [...prev.logs, "❌ ERROR: " + (error.response?.data?.error || error.message)]
+        logs: [...prev.logs, "❌ ERROR: " + error.message]
       }));
     } finally {
-      // Final cleanup of the event target to allow re-selection
       try { event.target.value = ""; } catch (e) {}
     }
   };
