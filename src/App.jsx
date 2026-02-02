@@ -44,18 +44,14 @@ function App() {
     });
 
     // 🧼 HARD FIX: DO NOT reload. Reload is the silent refresh killer.
-    const handleReset = (payload) => {
-      console.log("SERVER RESET: Clearing memory (NO RELOAD).", payload || "");
-      localStorage.removeItem('lokmat_processed_clips');
-      localStorage.removeItem('processedClips');
-      setClips([]);
-      setStatus({
-        isProcessing: false,
-        progress: 0,
-        logs: ["Server reset received. State cleared (no reload)."]
-      });
-      // window.location.reload(); // ❌ removed
-    };
+    // App.jsx
+const handleReset = () => {
+    console.log("🧼 SERVER RESET: Cleaning state, keeping page alive.");
+    localStorage.removeItem('lokmat_processed_clips');
+    setClips([]);
+    // window.location.reload(); // 👈 DELETE THIS LINE COMPLETELY
+    setStatus({ isProcessing: false, progress: 0, logs: ["⚠️ Server restarted. Connection resumed."] });
+};
 
     newSocket.on("SESSION_HARD_RESET", handleReset);
     newSocket.on("GLOBAL_RESET", handleReset);
