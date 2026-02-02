@@ -45,46 +45,63 @@ function App() {
 
     // 🧼 HARD FIX: DO NOT reload. Reload is the silent refresh killer.
     // App.jsx
-const handleReset = () => {
-    console.log("🧼 SERVER RESET: Cleaning state, keeping page alive.");
+// --- VERSION 3.04: SHIELDED ENGINE HANDLER ---
+
+const handleReset = (payload) => {
+  // 🛡️ THE SHIELD: If the engine is mid-stream, ignore the reset to prevent UI jump-back
+  setStatus((currentStatus) => {
+    if (currentStatus.isProcessing && currentStatus.progress > 0 && currentStatus.progress < 100) {
+      console.log("🛡️ SHIELD ACTIVE: Server signaled reset, but we are mid-process. Staying alive.");
+      return currentStatus;
+    }
+
+    console.log("🧼 SERVER RESET: Cleaning state, keeping page alive.", payload || "");
     localStorage.removeItem('lokmat_processed_clips');
+    localStorage.removeItem('processedClips');
     setClips([]);
-    // window.location.reload(); // 👈 DELETE THIS LINE COMPLETELY
-    setStatus({ isProcessing: false, progress: 0, logs: ["⚠️ Server restarted. Connection resumed."] });
+    
+    return { 
+      isProcessing: false, 
+      progress: 0, 
+      logs: ["⚠️ Server restarted. Connection resumed."] 
+    };
+  });
 };
 
-    newSocket.on("SESSION_HARD_RESET", handleReset);
-    newSocket.on("GLOBAL_RESET", handleReset);
+newSocket.on("SESSION_HARD_RESET", handleReset);
+newSocket.on("GLOBAL_RESET", handleReset);
 
-    newSocket.on("statusUpdate", (data) => {
-      if (data && data.newClip) {
-        setClips((prev) => {
-          const exists = prev.find((c) => c.localUrl === data.newClip.localUrl);
-          const updatedClip = {
-            ...data.newClip,
-            thumbnail: data.newClip.thumbnail
-              ? (data.newClip.thumbnail.split('?')[0] + "?v=" + Date.now())
-              : null
-          };
-          if (exists) {
-            return prev.map(c => (c.localUrl === updatedClip.localUrl ? updatedClip : c));
-          }
-          return [updatedClip].concat(prev);
-        });
+newSocket.on("statusUpdate", (data) => {
+  if (data && data.newClip) {
+    setClips((prev) => {
+      const exists = prev.find((c) => c.localUrl === data.newClip.localUrl);
+      const updatedClip = {
+        ...data.newClip,
+        thumbnail: data.newClip.thumbnail
+          ? (data.newClip.thumbnail.split('?')[0] + "?v=" + Date.now())
+          : null
+      };
+      if (exists) {
+        return prev.map(c => (c.localUrl === updatedClip.localUrl ? updatedClip : c));
       }
-
-      if (data && (data.progress !== undefined || data.log)) {
-        setStatus((prev) => {
-          const nextProgress = (data.progress !== undefined ? data.progress : prev.progress);
-          return {
-            ...prev,
-            progress: nextProgress,
-            isProcessing: (nextProgress > 0 && nextProgress < 100),
-            logs: data.log ? ([]).concat(prev.logs || [], [data.log]).slice(-10) : (prev.logs || [])
-          };
-        });
-      }
+      return [updatedClip].concat(prev);
     });
+  }
+
+  if (data && (data.progress !== undefined || data.log)) {
+    setStatus((prev) => {
+      const nextProgress = (data.progress !== undefined ? data.progress : prev.progress);
+      
+      // LOGIC: Ensure we don't drop 'isProcessing' if a log comes in without progress data
+      return {
+        ...prev,
+        progress: nextProgress,
+        isProcessing: (nextProgress > 0 && nextProgress < 100),
+        logs: data.log ? ([]).concat(prev.logs || [], [data.log]).slice(-10) : (prev.logs || [])
+      };
+    });
+  }
+});
 
     newSocket.on("upload-progress", (data) => {
       if (!data) return;
