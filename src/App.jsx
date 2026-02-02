@@ -1,11 +1,10 @@
-```jsx
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import EditPage from './pages/EditPage';
 import io from 'socket.io-client';
 
-// --- VERSION 3.04: CLOUD HANDSHAKE + NO-RELOAD RESET + CORS-SAFE SOCKET ---
+// --- VERSION 3.05: CLOUD HANDSHAKE + NO-RELOAD RESET + ESBUILD-SAFE STRINGS ---
 function App() {
   const [clips, setClips] = useState([]);
   const [status, setStatus] = useState({ isProcessing: false, progress: 0, logs: [] });
@@ -15,46 +14,45 @@ function App() {
     // ✅ SINGLE SOURCE OF TRUTH: Use one stable backend base for BOTH fetch + socket
     const backendUrl = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/\/$/, "");
 
-    console.log("🚀 LOKMAT STUDIO: Initializing Engine at:", backendUrl);
+    console.log("LOKMAT STUDIO: Initializing Engine at:", backendUrl);
 
     const newSocket = io(backendUrl, {
       path: "/socket.io/",
-      transports: ["websocket"], // 🚀 FORCE WEBSOCKET ONLY
-      upgrade: false,            // 🚀 DISABLE POLLING UPGRADES
-      withCredentials: false,    // ✅ CORS-SAFE: avoid credentialed CORS unless you truly need cookies
-      secure: backendUrl.startsWith("https"),
+      transports: ["websocket"],
+      upgrade: false,
+      withCredentials: false, // ✅ keep false unless you really need cookies
+      secure: backendUrl.indexOf("https://") === 0,
       reconnection: true,
       reconnectionAttempts: 10,
       timeout: 45000
     });
 
     newSocket.on("connect", () => {
-      console.log("✅ ENGINE CONNECTED! Session ID:", newSocket.id);
+      console.log("ENGINE CONNECTED! Session ID:", newSocket.id);
       setStatus((prev) => ({
         ...prev,
-        logs: [...(prev.logs || []), `✅ Engine connected: ${newSocket.id}`].slice(-10)
+        logs: ([]).concat(prev.logs || [], ["Engine connected: " + newSocket.id]).slice(-10)
       }));
     });
 
     newSocket.on("connect_error", (err) => {
-      console.error("❌ CONNECTION ERROR:", err.message);
+      console.error("CONNECTION ERROR:", err.message);
       setStatus((prev) => ({
         ...prev,
-        logs: [...(prev.logs || []), `❌ Socket connect_error: ${err.message}`].slice(-10)
+        logs: ([]).concat(prev.logs || [], ["Socket connect_error: " + err.message]).slice(-10)
       }));
     });
 
-    // 🧼 THE BRAIN WASH: Kill ghosts when server restarts
-    // ✅ HARD FIX: DO NOT reload the page. Reload is the "silent refresh" killer.
+    // 🧼 HARD FIX: DO NOT reload. Reload is the silent refresh killer.
     const handleReset = (payload) => {
-      console.log("🧼 SERVER RESET: Clearing memory (NO RELOAD).", payload || "");
+      console.log("SERVER RESET: Clearing memory (NO RELOAD).", payload || "");
       localStorage.removeItem('lokmat_processed_clips');
       localStorage.removeItem('processedClips');
       setClips([]);
       setStatus({
         isProcessing: false,
         progress: 0,
-        logs: ["🧼 Server reset received. State cleared (no reload)."]
+        logs: ["Server reset received. State cleared (no reload)."]
       });
       // window.location.reload(); // ❌ removed
     };
@@ -62,43 +60,47 @@ function App() {
     newSocket.on("SESSION_HARD_RESET", handleReset);
     newSocket.on("GLOBAL_RESET", handleReset);
 
-    // Keep the global statusUpdate listener here (App-level source of truth)
     newSocket.on("statusUpdate", (data) => {
-      if (data?.newClip) {
+      if (data && data.newClip) {
         setClips((prev) => {
           const exists = prev.find((c) => c.localUrl === data.newClip.localUrl);
           const updatedClip = {
             ...data.newClip,
             thumbnail: data.newClip.thumbnail
-              ? `${data.newClip.thumbnail.split('?')[0]}?v=${Date.now()}`
+              ? (data.newClip.thumbnail.split('?')[0] + "?v=" + Date.now())
               : null
           };
           if (exists) {
-            return prev.map(c => c.localUrl === updatedClip.localUrl ? updatedClip : c);
+            return prev.map(c => (c.localUrl === updatedClip.localUrl ? updatedClip : c));
           }
-          return [updatedClip, ...prev];
+          return [updatedClip].concat(prev);
         });
       }
 
-      if (data?.progress !== undefined || data?.log) {
-        setStatus((prev) => ({
-          ...prev,
-          progress: data.progress ?? prev.progress,
-          isProcessing: ((data.progress ?? prev.progress) > 0 && (data.progress ?? prev.progress) < 100),
-          logs: data.log ? [...(prev.logs || []), data.log].slice(-10) : (prev.logs || [])
-        }));
+      if (data && (data.progress !== undefined || data.log)) {
+        setStatus((prev) => {
+          const nextProgress = (data.progress !== undefined ? data.progress : prev.progress);
+          return {
+            ...prev,
+            progress: nextProgress,
+            isProcessing: (nextProgress > 0 && nextProgress < 100),
+            logs: data.log ? ([]).concat(prev.logs || [], [data.log]).slice(-10) : (prev.logs || [])
+          };
+        });
       }
     });
 
-    // Optional: keep upload-progress at App-level as well, so HomePage doesn't need to duplicate
     newSocket.on("upload-progress", (data) => {
       if (!data) return;
-      setStatus((prev) => ({
-        ...prev,
-        progress: data.percent ?? prev.progress,
-        isProcessing: (data.percent ?? prev.progress) > 0 && (data.percent ?? prev.progress) < 100,
-        logs: data.status ? [...(prev.logs || []), `⚙️ ${data.status}`].slice(-10) : (prev.logs || [])
-      }));
+      setStatus((prev) => {
+        const nextProgress = (data.percent !== undefined ? data.percent : prev.progress);
+        return {
+          ...prev,
+          progress: nextProgress,
+          isProcessing: (nextProgress > 0 && nextProgress < 100),
+          logs: data.status ? ([]).concat(prev.logs || [], ["UPLOAD: " + data.status]).slice(-10) : (prev.logs || [])
+        };
+      });
     });
 
     setSocket(newSocket);
@@ -118,7 +120,6 @@ function App() {
         <Route
           path="/"
           element={
-            /* 🛡️ GUARD: Only show HomePage once the socket is initialized */
             socket ? (
               <HomePage
                 clips={clips}
