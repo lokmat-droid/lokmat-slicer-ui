@@ -398,7 +398,7 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 
     setStatus({ isProcessing: true, progress: 10, logs: ["Manual Slicing Initiated..."] });
 
-    const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/\/$/, "");
+    const API_BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/\/$/, "");
     try {
       const response = await fetch(API_URL + "/api/manual-slice", {
         method: "POST",
