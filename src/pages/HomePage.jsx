@@ -371,34 +371,34 @@ try {
 
 
   const handleManualSlice = async () => {
-    if (!previewClip) return alert("Select a source video first!");
+  if (!previewClip) return alert("Select a source video first!");
 
-    setStatus({ isProcessing: true, progress: 10, logs: ["✂️ Manual Slicing Initiated..."] });
+  setStatus({ isProcessing: true, progress: 10, logs: ["✂️ Manual Slicing Initiated..."] });
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    try {
-      const response = await fetch(`${API_URL}/api/manual-slice`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    source: previewClip.localUrl,
-    start: manualStart,
-    end: manualEnd,
-    xOffset: focusX,
-    title: "Manual Director's Cut",
-  }),
-  credentials: "include",
-});
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  try {
+    const response = await fetch(`${API_URL}/api/manual-slice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: previewClip.localUrl,
+        start: manualStart,
+        end: manualEnd,
+        xOffset: focusX,
+        title: "Manual Director's Cut",
+      }),
+      credentials: "include",
+    });
 
-
-      const data = await response.json();
-      if (data.success) {
-        setStatus(prev => ({ ...prev, logs: [...prev.logs, "✅ Slice Sent to Engine"] }));
-      }
-    } catch (err) {
-      setStatus({ isProcessing: false, progress: 0, logs: ["❌ Manual Slice Failed"] });
+    const data = await response.json();
+    if (data.success) {
+      setStatus((prev) => ({ ...prev, logs: [...prev.logs, "✅ Slice Sent to Engine"] }));
     }
-  };
+  } catch (err) {
+    setStatus({ isProcessing: false, progress: 0, logs: ["❌ Manual Slice Failed"] });
+  }
+};
+
 
   const toggleSelect = (url) => {
     setSelectedClips(prev => prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]);
