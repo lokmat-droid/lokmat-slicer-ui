@@ -339,11 +339,13 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
     setStatus({ isProcessing: true, progress: 10, logs: ["🚀 Initiating upload...", "🧹 Previous session wiped."] });
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    try {
-      const response = await fetch(`${API_URL}/api/upload`, {
-        method: "POST",
-        body: formData,
-      });
+
+try {
+  const response = await fetch(`${API_URL}/api/upload`, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
       const data = await response.json();
       if (data.success) {
         setStatus(prev => ({ ...prev, progress: 100, logs: [...prev.logs, "✅ Upload Complete"] }));
