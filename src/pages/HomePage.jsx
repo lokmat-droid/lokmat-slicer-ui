@@ -364,17 +364,18 @@ if (data.success) {
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     try {
       const response = await fetch(`${API_URL}/api/manual-slice`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source: previewClip.localUrl,
-          start: manualStart,
-          end: manualEnd,
-          xOffset: focusX,
-          title: "Manual Director's Cut"
-        })
-          credentials: "include",
-      });
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    source: previewClip.localUrl,
+    start: manualStart,
+    end: manualEnd,
+    xOffset: focusX,
+    title: "Manual Director's Cut",
+  }),
+  credentials: "include",
+});
+
 
       const data = await response.json();
       if (data.success) {
