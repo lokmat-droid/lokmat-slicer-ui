@@ -340,64 +340,64 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-try {
-  const response = await fetch(`${API_URL}/api/upload`, {
-    method: "POST",
-    body: formData,
-    credentials: "include",
-  });
+    try {
+      const response = await fetch(`${API_URL}/api/upload`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    setStatus({
-      isProcessing: false,
-      progress: 0,
-      logs: [`❌ Upload Failed (${response.status}) ${text}`],
-    });
-    return;
-  }
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        setStatus({
+          isProcessing: false,
+          progress: 0,
+          logs: [`❌ Upload Failed (${response.status}) ${text}`],
+        });
+        return;
+      }
 
-  const data = await response.json();
-  if (data.success) {
-    setStatus((prev) => ({
-      ...prev,
-      progress: 100,
-      logs: [...prev.logs, "✅ Upload Complete"],
-    }));
-  }
-} catch (err) {
-  setStatus({ isProcessing: false, progress: 0, logs: ["❌ Upload Failed"] });
-}
-
+      const data = await response.json();
+      if (data.success) {
+        setStatus((prev) => ({
+          ...prev,
+          progress: 100,
+          logs: [...prev.logs, "✅ Upload Complete"],
+        }));
+      }
+    } catch (err) {
+      setStatus({ isProcessing: false, progress: 0, logs: ["❌ Upload Failed"] });
+    }
+  };
 
   const handleManualSlice = async () => {
-  if (!previewClip) return alert("Select a source video first!");
+    if (!previewClip) return alert("Select a source video first!");
 
-  setStatus({ isProcessing: true, progress: 10, logs: ["✂️ Manual Slicing Initiated..."] });
+    setStatus({ isProcessing: true, progress: 10, logs: ["✂️ Manual Slicing Initiated..."] });
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
-  try {
-    const response = await fetch(`${API_URL}/api/manual-slice`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        source: previewClip.localUrl,
-        start: manualStart,
-        end: manualEnd,
-        xOffset: focusX,
-        title: "Manual Director's Cut",
-      }),
-      credentials: "include",
-    });
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    try {
+      const response = await fetch(`${API_URL}/api/manual-slice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: previewClip.localUrl,
+          start: manualStart,
+          end: manualEnd,
+          xOffset: focusX,
+          title: "Manual Director's Cut",
+        }),
+        credentials: "include",
+      });
 
-    const data = await response.json();
-    if (data.success) {
-      setStatus((prev) => ({ ...prev, logs: [...prev.logs, "✅ Slice Sent to Engine"] }));
+      const data = await response.json();
+      if (data.success) {
+        setStatus((prev) => ({ ...prev, logs: [...prev.logs, "✅ Slice Sent to Engine"] }));
+      }
+    } catch (err) {
+      setStatus({ isProcessing: false, progress: 0, logs: ["❌ Manual Slice Failed"] });
     }
-  } catch (err) {
-    setStatus({ isProcessing: false, progress: 0, logs: ["❌ Manual Slice Failed"] });
-  }
-};
+  };
 
 
   const toggleSelect = (url) => {
