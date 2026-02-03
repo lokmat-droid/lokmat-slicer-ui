@@ -15,16 +15,14 @@ function App() {
     const backendUrl = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/\/$/, "");
 
     console.log("LOKMAT STUDIO: Initializing Engine at:", backendUrl);
-
-    const newSocket = io(backendUrl, {
+  const newSocket = io(backendUrl, {
   path: "/socket.io/",
-  transports: ["websocket", "polling"], // ✅ Adds polling as a fallback for Cloud Run stability
-  upgrade: true,                        // ✅ Allows the connection to upgrade smoothly
-  withCredentials: false,
-  secure: backendUrl.indexOf("https://") === 0,
+  transports: ["polling", "websocket"], // ✅ Matches backend fallback
+  upgrade: true,                        // ✅ Allows polling -> websocket upgrade
+  withCredentials: true,                // ✅ Required for Session Affinity cookies
+  secure: true,
   reconnection: true,
-  reconnectionAttempts: 10,
-  timeout: 60000                        // ✅ Increased timeout to 60s for AI processing
+  timeout: 60000                        // ✅ Match the 60s timeout
 });
 
     newSocket.on("connect", () => {
