@@ -17,15 +17,15 @@ function App() {
     console.log("LOKMAT STUDIO: Initializing Engine at:", backendUrl);
 
     const newSocket = io(backendUrl, {
-      path: "/socket.io/",
-      transports: ["websocket"],
-      upgrade: false,
-      withCredentials: false, // ✅ keep false unless you really need cookies
-      secure: backendUrl.indexOf("https://") === 0,
-      reconnection: true,
-      reconnectionAttempts: 10,
-      timeout: 45000
-    });
+  path: "/socket.io/",
+  transports: ["websocket", "polling"], // ✅ Adds polling as a fallback for Cloud Run stability
+  upgrade: true,                        // ✅ Allows the connection to upgrade smoothly
+  withCredentials: false,
+  secure: backendUrl.indexOf("https://") === 0,
+  reconnection: true,
+  reconnectionAttempts: 10,
+  timeout: 60000                        // ✅ Increased timeout to 60s for AI processing
+});
 
     newSocket.on("connect", () => {
       console.log("ENGINE CONNECTED! Session ID:", newSocket.id);
