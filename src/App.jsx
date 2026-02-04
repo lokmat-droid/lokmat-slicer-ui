@@ -17,12 +17,20 @@ function App() {
     console.log("LOKMAT STUDIO: Initializing Engine at:", backendUrl);
   const newSocket = io(backendUrl, {
   path: "/socket.io/",
-  transports: ["polling", "websocket"], // ✅ Matches backend fallback
-  upgrade: true,                        // ✅ Allows polling -> websocket upgrade
-  withCredentials: true,                // ✅ Required for Session Affinity cookies
+  // ✅ THE FIX: Remove "polling". Go straight to "websocket".
+  transports: ["websocket"], 
+  
+  // ✅ Disable upgrade since we are already at the top tier
+  upgrade: false, 
+  
+  // ✅ Required for Cloud Run Session Affinity (stickiness)
+  withCredentials: true, 
+  
   secure: true,
   reconnection: true,
-  timeout: 60000                        // ✅ Match the 60s timeout
+  reconnectionAttempts: 10, // Give it more chances during cold starts
+  reconnectionDelay: 2000,
+  timeout: 60000 
 });
 
     newSocket.on("connect", () => {
