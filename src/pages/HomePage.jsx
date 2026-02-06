@@ -401,29 +401,30 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
     setStatus({ isProcessing: true, progress: 10, logs: ["Manual Slicing Initiated..."] });
 
     try {
-      const response = await fetch(API_URL + "/api/manual-slice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: previewClip.localUrl,
-          start: manualStart,
-          end: manualEnd,
-          xOffset: focusX,
-          title: "Manual Director's Cut",
-        })
-      });
+  const response = await fetch(API_URL + "/api/manual-slice", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    // ✅ Mandatory for Session Affinity to work with CORS
+    credentials: "include", 
+    body: JSON.stringify({
+      source: previewClip.localUrl,
+      start: manualStart,
+      end: manualEnd,
+      xOffset: focusX,
+      title: "Manual Director's Cut",
+    })
+  });
 
-      const data = await response.json();
-      if (data && data.success) {
-        setStatus((prev) => ({
-          ...prev,
-          logs: ([]).concat(prev.logs || [], ["Slice Sent to Engine"]).slice(-5)
-        }));
-      }
-    } catch (err) {
-      setStatus({ isProcessing: false, progress: 0, logs: ["Manual Slice Failed"] });
-    }
-  };
+  const data = await response.json();
+  if (data && data.success) {
+    setStatus((prev) => ({
+      ...prev,
+      logs: ([]).concat(prev.logs || [], ["Slice Sent to Engine"]).slice(-5)
+    }));
+  }
+} catch (err) {
+  setStatus({ isProcessing: false, progress: 0, logs: ["Manual Slice Failed"] });
+}
 
   const toggleSelect = (url) => {
     setSelectedClips(prev => prev.includes(url) ? prev.filter(u => u !== url) : prev.concat([url]));
