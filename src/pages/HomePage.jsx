@@ -425,6 +425,7 @@ function HomePage({ clips, setClips, status, setStatus, socket }) {
 } catch (err) {
   setStatus({ isProcessing: false, progress: 0, logs: ["Manual Slice Failed"] });
 }
+  };
 
   const toggleSelect = (url) => {
     setSelectedClips(prev => prev.includes(url) ? prev.filter(u => u !== url) : prev.concat([url]));
